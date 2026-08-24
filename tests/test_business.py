@@ -58,8 +58,11 @@ class BusinessFlowTests(unittest.IsolatedAsyncioTestCase):
         row = await self.db.fetchone(
             "SELECT COUNT(*) AS total FROM schema_migrations"
         )
-        self.assertEqual(row["total"], 6)
+        self.assertEqual(row["total"], 7)
         self.assertTrue(await self.db.writable_check())
+        settings = await self.db.get_settings(1)
+        self.assertTrue(settings.auto_close_enabled)
+        self.assertEqual(settings.auto_close_delay, 60)
         foreign_key_errors = await self.db.fetchall("PRAGMA foreign_key_check")
         self.assertEqual(foreign_key_errors, [])
         columns = {
@@ -77,6 +80,26 @@ class BusinessFlowTests(unittest.IsolatedAsyncioTestCase):
                 "terminal_processed_at",
             }.issubset(columns)
         )
+
+    async def test_auto_close_migration_updates_legacy_defaults(self) -> None:
+        await self.db.set_settings(
+            1,
+            {
+                "auto_close_enabled": "false",
+                "auto_close_delay": "3600",
+            },
+            actor_id=999,
+        )
+        await self.db.connection.execute(
+            "DELETE FROM schema_migrations WHERE version = 7"
+        )
+        await self.db.connection.commit()
+        await self.db.close()
+        await self.db.start()
+
+        settings = await self.db.get_settings(1)
+        self.assertTrue(settings.auto_close_enabled)
+        self.assertEqual(settings.auto_close_delay, 60)
 
     async def test_create_sale_is_idempotent(self) -> None:
         interaction_id = self.next_id()

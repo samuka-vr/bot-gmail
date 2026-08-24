@@ -16,6 +16,7 @@ from app.exceptions import (
 from app.models import GuildSettings, Sale
 from app.utils.embeds import build_sale_embed
 from app.utils.money import format_brl
+from app.utils.mentions import allowed_user_mentions
 from app.utils.permissions import is_admin, require_staff
 from app.utils.text import truncate
 from app.utils.validation import ParsedEmail, render_cart_template
@@ -43,12 +44,7 @@ class WorkflowService:
         try:
             await channel.send(
                 content,
-                allowed_mentions=discord.AllowedMentions(
-                    everyone=False,
-                    roles=False,
-                    users=[discord.Object(id=sale.customer_id)],
-                    replied_user=False,
-                ),
+                allowed_mentions=allowed_user_mentions(sale.customer_id),
             )
         except (discord.Forbidden, discord.HTTPException) as exc:
             LOGGER.warning(
@@ -206,9 +202,7 @@ class WorkflowService:
         content = truncate(content, 2_000)
 
         notice: discord.Message | None = None
-        allowed = discord.AllowedMentions(
-            everyone=False, roles=False, users=[customer], replied_user=False
-        )
+        allowed = allowed_user_mentions(customer.id)
         if settings.cart_message_target in {"ticket", "both"}:
             notice = await channel.send(content, allowed_mentions=allowed)
         if settings.cart_message_target in {"dm", "both"}:
@@ -216,7 +210,7 @@ class WorkflowService:
             try:
                 await customer.send(
                     dm_content,
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=allowed,
                 )
             except (discord.Forbidden, discord.HTTPException):
                 LOGGER.info("DM automática indisponível para venda %s", sale.id)
@@ -702,7 +696,7 @@ class WorkflowService:
                 await customer.send(
                     f"<@{sale.customer_id}>, {message}\n\n"
                     f"Volte ao atendimento: {ticket_url}",
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=allowed_user_mentions(sale.customer_id),
                 )
             except (discord.Forbidden, discord.NotFound):
                 return False

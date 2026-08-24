@@ -21,6 +21,7 @@ from app.modals.configuration import (
 )
 from app.modals.staff import CloseSaleModal, NotifyCustomerModal
 from app.utils.embeds import build_panel_embed, build_sale_embed
+from app.utils.mentions import allowed_user_mentions
 from app.views.configuration import (
     AppearanceConfigView,
     BotConfigView,
@@ -272,16 +273,35 @@ class EmbedTests(unittest.TestCase):
             sample_sale(SaleStatus.WAITING), accounts, self.settings
         )
         fields = {field.name: field.value for field in cart.fields}
-        self.assertEqual(fields["Contas"], "3")
-        self.assertEqual(fields["Total"], "R$ 6,00")
-        self.assertEqual(fields["Pix"], "cliente@pix.com")
-        self.assertIn("G-mails", fields)
+        self.assertEqual(cart.title, "Venda #0042 · Aguardando")
+        self.assertIn("**Resumo:** 3 contas · R$ 2,00/un", cart.description)
+        self.assertIn("**Total:** R$ 6,00", cart.description)
+        self.assertIn("**Pix:** `cliente@pix.com`", fields["Pagamento"])
+        self.assertTrue(any(name.startswith("G-mails · 3") for name in fields))
+        self.assertLessEqual(len(cart.fields), 3)
 
         payment = build_sale_embed(
             sample_sale(SaleStatus.PAYMENT), accounts, self.settings
         )
-        self.assertTrue(payment.title.startswith("Pagamento · Venda"))
+        self.assertEqual(payment.title, "Venda #0042 · Pagamento")
+        self.assertEqual(len(payment.fields), 1)
         self.assertFalse(any(field.name.startswith("G-mails") for field in payment.fields))
+
+    def test_sale_embed_uses_configured_logo_as_thumbnail(self) -> None:
+        settings = GuildSettings.from_mapping(
+            {**DEFAULT_SETTINGS, "logo_url": "https://example.com/logo.png"}
+        )
+        embed = build_sale_embed(
+            sample_sale(SaleStatus.WAITING), sample_accounts(1), settings
+        )
+        self.assertEqual(embed.thumbnail.url, "https://example.com/logo.png")
+
+    def test_customer_mentions_allow_only_the_target_user(self) -> None:
+        mentions = allowed_user_mentions(123)
+        self.assertFalse(mentions.values["everyone"])
+        self.assertFalse(mentions.values["roles"])
+        self.assertFalse(mentions.values["replied_user"])
+        self.assertEqual([user.id for user in mentions.values["users"]], [123])
 
     def test_cart_embed_stays_within_discord_limits_at_maximum(self) -> None:
         now = datetime.now(UTC)

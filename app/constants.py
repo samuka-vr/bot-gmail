@@ -88,8 +88,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "max_active_sales": "1",
     "customer_cancellation_enabled": "true",
     "dm_notifications_enabled": "true",
-    "auto_close_enabled": "false",
-    "auto_close_delay": "3600",
+    "auto_close_enabled": "true",
+    "auto_close_delay": "60",
     "rename_closed_tickets": "true",
 }
 

@@ -17,7 +17,7 @@ Este documento congela as decisões de produto antes da implementação. O bot �
 
 1. **Painel público** — Embed V1 com logo, banner, título, descrição, informação curta, preço, rodapé e apenas `Vender Gmail`.
 2. **Modal de venda** — `Gmails`, `Chave Pix`, `Nome do titular`.
-3. **Ticket / carrinho** — embed da venda com status, cliente, código, quantidade, preço, total, Pix, titular e contas. Controles: Select `Editar carrinho` e botão Danger `Cancelar venda`.
+3. **Ticket / carrinho** — embed mobile-first com estado no título, resumo curto no corpo, Pix/titular agrupados e uma lista compacta de contas. Controles: Select `Editar carrinho` e botão Danger `Cancelar venda`.
 4. **Adicionar Gmail** — modal curto; retorna ao mesmo carrinho atualizado.
 5. **Remover Gmail** — resposta efêmera com Select de contas ativas; o carrinho original é atualizado.
 6. **Editar Pix** — um modal com chave e titular; o carrinho original é atualizado.
@@ -31,8 +31,8 @@ Este documento congela as decisões de produto antes da implementação. O bot �
 
 1. **AGUARDANDO** — botão principal `Assumir`; Select `Ações` com notificar e encerrar.
 2. **EM_ANALISE** — botão principal `Continuar para pagamento`; Select `Ações` com notificar e encerrar.
-3. **Notificar cliente** — modal `Mensagem`; envia DM com link do ticket e trata DM fechada.
-4. **Encerrar venda** — modal `Motivo`; encerra, registra, gera transcript quando habilitado e bloqueia.
+3. **Notificar cliente** — modal `Mensagem`; envia DM com link do ticket, libera somente a menção do cliente e trata DM fechada.
+4. **Encerrar venda** — modal `Motivo`; encerra, registra, gera transcript quando habilitado, bloqueia e agenda o fechamento automático.
 5. **PAGAMENTO** — embed dedicado; botão `Confirmar pagamento`; Select `Ações` com voltar, notificar e encerrar.
 6. **PAGO** — botão único `Finalizar venda`.
 7. **`/fila`** — lista efêmera e compacta das vendas ativas.
@@ -104,7 +104,7 @@ O ticket nega `view_channel` a `@everyone` e permite cliente, Staff, Admin e bot
 - Duplicidade no formulário, na mesma venda e em qualquer venda ativa do mesmo servidor é recusada em transação.
 - Locks por venda/cliente e por publicação de painel evitam concorrência local; constraints e updates condicionais garantem correção após restart ou múltiplas instâncias acidentais.
 - Canal e mensagem recebem IDs persistidos; criação e finalização são recuperáveis e idempotentes.
-- Mensagens e logs usam `AllowedMentions` restrito e não registram tokens ou segredos.
+- Mensagens e logs usam `AllowedMentions` restrito. DMs e avisos de ticket liberam somente o ID do cliente que aparece no texto; tokens e segredos nunca são registrados.
 
 ## Intents e limites oficiais adotados
 

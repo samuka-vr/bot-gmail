@@ -115,7 +115,7 @@ Ordem recomendada:
 4. **Painel** — revise título, descrição, rodapé, botão e texto do preço.
 5. **Aparência** — configure cor, logo, banner e IDs opcionais de emojis customizados.
 6. **Mensagem do carrinho** — ajuste texto, destino e auto-delete.
-7. **Logs** e **Configurações gerais** — revise toggles, prefixo, limite e auto-close.
+7. **Logs** e **Configurações gerais** — revise toggles, prefixo, limite e auto-close. O padrão fecha tickets terminais após 1 minuto.
 8. **Diagnóstico** — corrija qualquer item com `FALHA`.
 9. **Publicar / Atualizar painel** — publique somente após o diagnóstico.
 
@@ -142,6 +142,8 @@ Placeholders disponíveis:
 - `{ticket}` — menção/link do ticket.
 
 Destinos possíveis: ticket, DM ou ambos. O auto-delete se aplica à mensagem enviada no ticket. O prazo fica persistido e sobrevive a reinícios.
+
+As DMs permitem somente a menção do próprio cliente. O Discord ainda pode não emitir uma notificação push conforme as preferências do usuário, mas a mensagem continua sendo entregue normalmente quando a DM está aberta.
 
 ## Verificação manual e segurança
 
@@ -242,7 +244,7 @@ O uso real varia com a quantidade de servidores, canais e atividade. O alvo é u
 - Mensagens apagadas antes da finalização não aparecem no transcript.
 - Anexos são referenciados por URL; não são baixados nem duplicados.
 - DM depende das configurações de privacidade do cliente.
-- Auto-close apaga o canal do Discord, mas nunca o registro SQLite.
+- Auto-close vem ativo com prazo padrão de 1 minuto, pode ser desligado em `/botconfig` e nunca apaga o registro SQLite.
 
 ## Referências oficiais
 
