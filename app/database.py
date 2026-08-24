@@ -344,8 +344,11 @@ class Database:
             SELECT
                 SUM(CASE WHEN status = 'FINALIZADO' THEN 1 ELSE 0 END)
                     AS completed_sales,
-                SUM(CASE WHEN status = 'ENCERRADO' THEN 1 ELSE 0 END)
-                    AS closed_sales,
+                SUM(CASE
+                    WHEN status = 'ENCERRADO'
+                     AND closed_by_id = customer_id
+                    THEN 1 ELSE 0
+                END) AS cancelled_sales,
                 COALESCE(SUM(
                     CASE WHEN status = 'FINALIZADO' THEN unit_price_cents * (
                         SELECT COUNT(*) FROM sale_accounts a
@@ -378,7 +381,7 @@ class Database:
         )
         return {
             "completed_sales": int(summary["completed_sales"] or 0),
-            "closed_sales": int(summary["closed_sales"] or 0),
+            "cancelled_sales": int(summary["cancelled_sales"] or 0),
             "received_cents": int(summary["received_cents"] or 0),
             "sold_accounts": int(summary["sold_accounts"] or 0),
             "recent": recent,

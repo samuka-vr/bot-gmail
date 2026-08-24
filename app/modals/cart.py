@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 class AddGmailModal(discord.ui.Modal, title="Adicionar Gmail"):
     accounts = discord.ui.Label(
         text="Gmails",
+        description="Um endereço por linha. Nunca envie senha.",
         component=discord.ui.TextInput(
             placeholder="Um Gmail por linha",
             style=discord.TextStyle.paragraph,
@@ -75,11 +76,17 @@ class EditPixModal(discord.ui.Modal, title="Editar Pix"):
             custom_id="sk:modal:pix:holder",
         )
         self.add_item(
-            discord.ui.Label(text="Chave Pix", component=self.pix_key)
+            discord.ui.Label(
+                text="Chave Pix",
+                description="Chave que receberá o pagamento.",
+                component=self.pix_key,
+            )
         )
         self.add_item(
             discord.ui.Label(
-                text="Nome do titular", component=self.pix_holder
+                text="Nome do titular",
+                description="Nome vinculado à chave Pix.",
+                component=self.pix_holder,
             )
         )
 

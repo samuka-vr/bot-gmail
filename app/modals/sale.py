@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from app.utils.validation import parse_gmail_lines, validate_pix
+from app.views.links import TicketLinkView
 
 if TYPE_CHECKING:
     from app.bot import SKStoreBot
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 class SaleModal(discord.ui.Modal, title="Vender Gmail"):
     accounts = discord.ui.Label(
         text="Gmails",
+        description="Um endereço por linha. Nunca envie senha.",
         component=discord.ui.TextInput(
             placeholder="Um Gmail por linha",
             style=discord.TextStyle.paragraph,
@@ -25,6 +27,7 @@ class SaleModal(discord.ui.Modal, title="Vender Gmail"):
     )
     pix_key = discord.ui.Label(
         text="Chave Pix",
+        description="Chave que receberá o pagamento.",
         component=discord.ui.TextInput(
             min_length=3,
             max_length=140,
@@ -34,6 +37,7 @@ class SaleModal(discord.ui.Modal, title="Vender Gmail"):
     )
     pix_holder = discord.ui.Label(
         text="Nome do titular",
+        description="Nome vinculado à chave Pix.",
         component=discord.ui.TextInput(
             min_length=2,
             max_length=100,
@@ -69,8 +73,9 @@ class SaleModal(discord.ui.Modal, title="Vender Gmail"):
             await self.bot.handle_user_exception(interaction, exc)
             return
         await interaction.followup.send(
-            f"Recebemos sua venda. Acompanhe em {channel.mention}.",
+            "Venda criada.",
             ephemeral=True,
+            view=TicketLinkView(channel.jump_url),
         )
 
     async def on_error(

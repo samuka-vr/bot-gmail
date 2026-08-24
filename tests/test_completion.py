@@ -41,7 +41,9 @@ class CompletionTests(unittest.IsolatedAsyncioTestCase):
         scheduled = datetime.fromisoformat(
             bot.database.set_ticket_delete_at.await_args.args[1]
         )
-        self.assertEqual((scheduled - closed_at).total_seconds(), 60)
+        remaining = (scheduled - datetime.now(UTC)).total_seconds()
+        self.assertGreaterEqual(remaining, 59)
+        self.assertLessEqual(remaining, 60)
         bot.maintenance.notify.assert_called_once_with()
         bot.database.mark_terminal_processed.assert_awaited_once_with(42)
 

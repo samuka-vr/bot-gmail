@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 import discord
 
+from app.models import GuildSettings
+
 if TYPE_CHECKING:
     from app.bot import SKStoreBot
 
@@ -14,6 +16,7 @@ class Check:
     label: str
     passed: bool
     detail: str = ""
+    group: str = "Sistema"
 
 
 class DiagnosticService:
@@ -35,15 +38,27 @@ class DiagnosticService:
         bot_member = guild.me
         checks.extend(
             [
-                Check("Canal do painel", isinstance(panel, discord.TextChannel)),
+                Check(
+                    "Canal do painel",
+                    isinstance(panel, discord.TextChannel),
+                    group="Configuração",
+                ),
                 Check(
                     "Categoria de tickets",
                     isinstance(category, discord.CategoryChannel),
+                    group="Configuração",
                 ),
-                Check("Canal de logs", isinstance(logs, discord.TextChannel)),
+                Check(
+                    "Canal de logs",
+                    not settings.logs_enabled
+                    or isinstance(logs, discord.TextChannel),
+                    group="Configuração",
+                ),
                 Check(
                     "Canal de transcripts",
-                    isinstance(transcripts, discord.TextChannel),
+                    not settings.transcripts_enabled
+                    or isinstance(transcripts, discord.TextChannel),
+                    group="Configuração",
                 ),
                 Check(
                     "Cargo de Staff",
@@ -51,6 +66,7 @@ class DiagnosticService:
                         staff_role
                         and staff_role.id != guild.default_role.id
                     ),
+                    group="Configuração",
                 ),
                 Check(
                     "Cargo de Admin/Manager",
@@ -58,6 +74,7 @@ class DiagnosticService:
                         admin_role
                         and admin_role.id != guild.default_role.id
                     ),
+                    group="Configuração",
                 ),
                 Check(
                     "Cargos separados",
@@ -66,6 +83,7 @@ class DiagnosticService:
                         and admin_role
                         and staff_role.id != admin_role.id
                     ),
+                    group="Configuração",
                 ),
                 Check(
                     "Hierarquia de cargos",
@@ -77,6 +95,7 @@ class DiagnosticService:
                         and bot_member.top_role > admin_role
                     ),
                     "bot acima de Staff e Admin",
+                    "Configuração",
                 ),
             ]
         )
@@ -108,7 +127,7 @@ class DiagnosticService:
             and category_permissions
             and category_permissions.embed_links
         )
-        can_attach = bool(
+        can_attach = not settings.transcripts_enabled or bool(
             bot_member
             and category_permissions
             and category_permissions.attach_files
@@ -117,15 +136,20 @@ class DiagnosticService:
         )
         checks.extend(
             [
-                Check("Enviar mensagens", can_send),
-                Check("Enviar embeds", can_embed),
-                Check("Anexar transcripts", can_attach),
+                Check(
+                    "Enviar mensagens", can_send, group="Permissões"
+                ),
+                Check("Enviar embeds", can_embed, group="Permissões"),
+                Check(
+                    "Anexar transcripts", can_attach, group="Permissões"
+                ),
                 Check(
                     "Criar canais de ticket",
                     bool(
                         category_permissions
                         and category_permissions.manage_channels
                     ),
+                    group="Permissões",
                 ),
                 Check(
                     "Gerenciar permissões do ticket",
@@ -133,6 +157,7 @@ class DiagnosticService:
                         category_permissions
                         and category_permissions.manage_roles
                     ),
+                    group="Permissões",
                 ),
                 Check(
                     "Ler histórico do ticket",
@@ -140,11 +165,14 @@ class DiagnosticService:
                         category_permissions
                         and category_permissions.read_message_history
                     ),
+                    group="Permissões",
                 ),
             ]
         )
 
-        checks.append(Check("SQLite gravável", await self.bot.database.writable_check()))
+        checks.append(
+            Check("SQLite gravável", await self.bot.database.writable_check())
+        )
         checks.append(
             Check("Mensagem do painel", await self._panel_exists(panel, settings.panel_message_id))
         )
@@ -154,6 +182,26 @@ class DiagnosticService:
             and all(view.is_persistent() for view in self.bot.persistent_views)
         )
         checks.append(Check("Views persistentes", persistent))
+        checks.append(
+            Check(
+                "Agendador de fechamento",
+                self.bot.maintenance.running,
+            )
+        )
+        checks.append(
+            Check(
+                "Prazo do auto-close",
+                not settings.auto_close_enabled
+                or settings.auto_close_delay >= 30,
+                (
+                    f"{settings.auto_close_delay} s"
+                    if settings.auto_close_enabled
+                    else "desativado"
+                ),
+            )
+        )
+        icons_ok, icons_detail = await self._custom_icons(guild, settings)
+        checks.append(Check("Ícones personalizados", icons_ok, icons_detail))
         intents_ok = bool(
             self.bot.intents.guilds
             and self.bot.intents.guild_messages
@@ -168,18 +216,61 @@ class DiagnosticService:
         )
 
         passed = sum(check.passed for check in checks)
-        lines = [
-            f"[{'OK' if check.passed else 'FALHA'}] {check.label}"
-            + (f" — {check.detail}" if check.detail else "")
-            for check in checks
-        ]
         embed = discord.Embed(
             title="Diagnóstico · SK Store",
-            description="\n".join(lines),
+            description=(
+                "Confira as pendências antes de publicar ou atualizar o painel."
+            ),
             colour=settings.embed_color,
         )
+        for group in ("Configuração", "Permissões", "Sistema"):
+            grouped = [check for check in checks if check.group == group]
+            group_passed = sum(check.passed for check in grouped)
+            lines = [
+                f"[{'OK' if check.passed else 'FALHA'}] {check.label}"
+                + (f" — {check.detail}" if check.detail else "")
+                for check in grouped
+            ]
+            embed.add_field(
+                name=f"{group} · {group_passed}/{len(grouped)}",
+                value="\n".join(lines),
+                inline=False,
+            )
         embed.set_footer(text=f"{passed}/{len(checks)} verificações aprovadas")
         return embed
+
+    async def _custom_icons(
+        self, guild: discord.Guild, settings: GuildSettings
+    ) -> tuple[bool, str]:
+        icon_ids = {
+            int(icon_id)
+            for icon_id in (
+                settings.icon_sell_id,
+                settings.icon_edit_id,
+                settings.icon_staff_id,
+                settings.icon_payment_id,
+            )
+            if icon_id
+        }
+        if not icon_ids:
+            return True, "não configurados"
+
+        available = {
+            emoji_id
+            for emoji_id in icon_ids
+            if guild.get_emoji(emoji_id) is not None
+            or self.bot.get_emoji(emoji_id) is not None
+        }
+        fetcher = getattr(self.bot, "fetch_application_emojis", None)
+        if fetcher is not None:
+            try:
+                available.update(emoji.id for emoji in await fetcher())
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+        missing = sorted(icon_ids - available)
+        if missing:
+            return False, "não encontrados: " + ", ".join(map(str, missing))
+        return True, f"{len(icon_ids)} disponíveis"
 
     async def _channel(
         self, guild: discord.Guild, channel_id: int | None

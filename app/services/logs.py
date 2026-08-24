@@ -148,43 +148,38 @@ class LogService:
         self, event: aiosqlite.Row, sale: Sale | None, colour: int
     ) -> discord.Embed:
         event_type = str(event["event_type"])
+        label = EVENT_LABELS.get(event_type, "Evento da SK Store")
+        title = f"Venda #{sale.id:04d} · {label}" if sale else label
         embed = discord.Embed(
-            title=EVENT_LABELS.get(event_type, "Evento da SK Store"),
+            title=title,
             colour=colour,
             timestamp=datetime.fromisoformat(str(event["created_at"])),
         )
+        summary: list[str] = []
         if sale:
             accounts = await self.bot.database.get_accounts(sale.id)
-            embed.add_field(name="Venda", value=f"#{sale.id:04d}", inline=True)
-            embed.add_field(
-                name="Cliente", value=f"<@{sale.customer_id}>", inline=True
-            )
-            embed.add_field(
-                name="Status", value=STATUS_LABELS[sale.status], inline=True
-            )
-            embed.add_field(name="Contas", value=str(len(accounts)), inline=True)
-            embed.add_field(
-                name="Total",
-                value=format_brl(len(accounts) * sale.unit_price_cents),
-                inline=True,
-            )
+            quantity = len(accounts)
+            account_label = "1 conta" if quantity == 1 else f"{quantity} contas"
+            summary.append(f"**Cliente:** <@{sale.customer_id}>")
             if sale.channel_id:
-                embed.add_field(
-                    name="Ticket", value=f"<#{sale.channel_id}>", inline=True
-                )
-        if event["actor_id"]:
-            embed.add_field(
-                name="Responsável",
-                value=f"<@{int(event['actor_id'])}>",
-                inline=True,
+                summary.append(f"**Ticket:** <#{sale.channel_id}>")
+            summary.append(
+                f"**Resumo:** {account_label} · "
+                f"{format_brl(quantity * sale.unit_price_cents)}"
             )
+        if event["actor_id"]:
+            summary.append(f"**Responsável:** <@{int(event['actor_id'])}>")
+        if summary:
+            embed.description = "\n".join(summary)
         try:
             payload = json.loads(str(event["payload_json"] or "{}"))
         except json.JSONDecodeError:
             payload = {}
         if "quantity" in payload:
             embed.add_field(
-                name="Quantidade", value=str(payload["quantity"]), inline=True
+                name="Alteração",
+                value=f"{int(payload['quantity'])} conta(s)",
+                inline=False,
             )
         if (
             sale
@@ -214,5 +209,6 @@ class LogService:
             embed.add_field(
                 name="Detalhe", value=f"{operation} · {error}", inline=False
             )
-        embed.set_footer(text="SK Store")
+        footer = STATUS_LABELS[sale.status] if sale else "SK Store"
+        embed.set_footer(text=f"{footer} · SK Store" if sale else footer)
         return embed

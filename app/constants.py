@@ -48,10 +48,9 @@ class EventType(StrEnum):
 
 
 DEFAULT_SETTINGS: dict[str, str] = {
-    "panel_title": "Venda seus G-mails para a SK Store",
+    "panel_title": "Venda contas Gmail para a SK Store",
     "panel_description": (
-        "Venda G-mails que você não usa mais ou crie novas contas para vender.\n\n"
-        "Pagamento via Pix."
+        "Venda contas que você não usa mais.\n\nPagamento via Pix."
     ),
     "panel_footer": "SK Store",
     "panel_button_text": "Vender Gmail",
@@ -78,7 +77,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "cart_message_enabled": "true",
     "cart_message_target": "ticket",
     "cart_message_text": (
-        "{user}, seu carrinho foi criado. Confira seus dados abaixo."
+        "{user}, seu carrinho está pronto. Confira os dados abaixo."
     ),
     "cart_message_auto_delete": "false",
     "cart_message_delete_delay": "60",

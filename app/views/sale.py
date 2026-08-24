@@ -49,9 +49,21 @@ class WaitingSaleView(_BotView):
         placeholder="Editar carrinho",
         custom_id=CustomID.CART_EDIT_WAITING,
         options=[
-            discord.SelectOption(label="Adicionar Gmail", value="add"),
-            discord.SelectOption(label="Remover Gmail", value="remove"),
-            discord.SelectOption(label="Editar Pix", value="pix"),
+            discord.SelectOption(
+                label="Adicionar Gmail",
+                value="add",
+                description="Inclua uma ou mais contas.",
+            ),
+            discord.SelectOption(
+                label="Remover Gmail",
+                value="remove",
+                description="Retire uma conta do carrinho.",
+            ),
+            discord.SelectOption(
+                label="Editar Pix",
+                value="pix",
+                description="Altere a chave e o titular.",
+            ),
         ],
         row=0,
     )
@@ -59,6 +71,17 @@ class WaitingSaleView(_BotView):
         self, interaction: discord.Interaction, select: discord.ui.Select
     ) -> None:
         await self.bot.workflow.handle_cart_edit(interaction, select.values[0])
+
+    @discord.ui.button(
+        label="Assumir",
+        style=discord.ButtonStyle.primary,
+        custom_id=CustomID.STAFF_CLAIM,
+        row=1,
+    )
+    async def claim(
+        self, interaction: discord.Interaction, _: discord.ui.Button
+    ) -> None:
+        await self.bot.workflow.claim(interaction)
 
     @discord.ui.button(
         label="Cancelar venda",
@@ -71,25 +94,22 @@ class WaitingSaleView(_BotView):
     ) -> None:
         await self.bot.workflow.request_customer_cancel(interaction)
 
-    @discord.ui.button(
-        label="Assumir",
-        style=discord.ButtonStyle.primary,
-        custom_id=CustomID.STAFF_CLAIM,
-        row=2,
-    )
-    async def claim(
-        self, interaction: discord.Interaction, _: discord.ui.Button
-    ) -> None:
-        await self.bot.workflow.claim(interaction)
-
     @discord.ui.select(
-        placeholder="Ações",
+        placeholder="Ações da equipe",
         custom_id=CustomID.STAFF_ACTIONS_WAITING,
         options=[
-            discord.SelectOption(label="Notificar cliente", value="notify"),
-            discord.SelectOption(label="Encerrar venda", value="close"),
+            discord.SelectOption(
+                label="Notificar cliente",
+                value="notify",
+                description="Envie uma mensagem por DM.",
+            ),
+            discord.SelectOption(
+                label="Encerrar venda",
+                value="close",
+                description="Encerre informando o motivo.",
+            ),
         ],
-        row=3,
+        row=2,
     )
     async def staff_actions(
         self, interaction: discord.Interaction, select: discord.ui.Select
@@ -122,9 +142,21 @@ class AnalysisSaleView(_BotView):
         placeholder="Editar carrinho",
         custom_id=CustomID.CART_EDIT_ANALYSIS,
         options=[
-            discord.SelectOption(label="Adicionar Gmail", value="add"),
-            discord.SelectOption(label="Remover Gmail", value="remove"),
-            discord.SelectOption(label="Editar Pix", value="pix"),
+            discord.SelectOption(
+                label="Adicionar Gmail",
+                value="add",
+                description="Inclua uma ou mais contas.",
+            ),
+            discord.SelectOption(
+                label="Remover Gmail",
+                value="remove",
+                description="Retire uma conta do carrinho.",
+            ),
+            discord.SelectOption(
+                label="Editar Pix",
+                value="pix",
+                description="Altere a chave e o titular.",
+            ),
         ],
         row=0,
     )
@@ -132,6 +164,17 @@ class AnalysisSaleView(_BotView):
         self, interaction: discord.Interaction, select: discord.ui.Select
     ) -> None:
         await self.bot.workflow.handle_cart_edit(interaction, select.values[0])
+
+    @discord.ui.button(
+        label="Continuar para pagamento",
+        style=discord.ButtonStyle.primary,
+        custom_id=CustomID.STAFF_CONTINUE,
+        row=1,
+    )
+    async def continue_payment(
+        self, interaction: discord.Interaction, _: discord.ui.Button
+    ) -> None:
+        await self.bot.workflow.continue_to_payment(interaction)
 
     @discord.ui.button(
         label="Cancelar venda",
@@ -144,25 +187,22 @@ class AnalysisSaleView(_BotView):
     ) -> None:
         await self.bot.workflow.request_customer_cancel(interaction)
 
-    @discord.ui.button(
-        label="Continuar para pagamento",
-        style=discord.ButtonStyle.primary,
-        custom_id=CustomID.STAFF_CONTINUE,
-        row=2,
-    )
-    async def continue_payment(
-        self, interaction: discord.Interaction, _: discord.ui.Button
-    ) -> None:
-        await self.bot.workflow.continue_to_payment(interaction)
-
     @discord.ui.select(
-        placeholder="Ações",
+        placeholder="Ações da equipe",
         custom_id=CustomID.STAFF_ACTIONS_ANALYSIS,
         options=[
-            discord.SelectOption(label="Notificar cliente", value="notify"),
-            discord.SelectOption(label="Encerrar venda", value="close"),
+            discord.SelectOption(
+                label="Notificar cliente",
+                value="notify",
+                description="Envie uma mensagem por DM.",
+            ),
+            discord.SelectOption(
+                label="Encerrar venda",
+                value="close",
+                description="Encerre informando o motivo.",
+            ),
         ],
-        row=3,
+        row=2,
     )
     async def staff_actions(
         self, interaction: discord.Interaction, select: discord.ui.Select
@@ -198,12 +238,24 @@ class PaymentSaleView(_BotView):
         await self.bot.workflow.confirm_payment(interaction)
 
     @discord.ui.select(
-        placeholder="Ações",
+        placeholder="Ações da equipe",
         custom_id=CustomID.STAFF_ACTIONS_PAYMENT,
         options=[
-            discord.SelectOption(label="Voltar", value="back"),
-            discord.SelectOption(label="Notificar cliente", value="notify"),
-            discord.SelectOption(label="Encerrar venda", value="close"),
+            discord.SelectOption(
+                label="Voltar",
+                value="back",
+                description="Retorne à análise e libere o carrinho.",
+            ),
+            discord.SelectOption(
+                label="Notificar cliente",
+                value="notify",
+                description="Envie uma mensagem por DM.",
+            ),
+            discord.SelectOption(
+                label="Encerrar venda",
+                value="close",
+                description="Encerre informando o motivo.",
+            ),
         ],
         row=1,
     )

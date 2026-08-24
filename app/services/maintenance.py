@@ -43,6 +43,10 @@ class MaintenanceService:
     def notify(self) -> None:
         self._wake.set()
 
+    @property
+    def running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
     async def _run(self) -> None:
         while True:
             try:

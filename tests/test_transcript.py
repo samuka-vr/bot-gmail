@@ -90,13 +90,19 @@ class TranscriptTests(unittest.IsolatedAsyncioTestCase):
         )
         bot = SimpleNamespace(database=FakeDatabase())
         service = TranscriptService(bot)
-        path = await service._write_html(FakeChannel([message]), sale)
+        path = await service._write_html(
+            FakeChannel([message]),
+            sale,
+            SimpleNamespace(embed_color=0x123456),
+        )
         try:
             content = path.read_text(encoding="utf-8")
         finally:
             path.unlink(missing_ok=True)
         self.assertIn("<!doctype html>", content.lower())
         self.assertIn("<style>", content)
+        self.assertIn("--accent:#123456", content)
+        self.assertIn("class='status'", content)
         self.assertIn("Venda #0042", content)
         self.assertIn("conta@gmail.com", content)
         self.assertIn("Pagamento aberto", content)

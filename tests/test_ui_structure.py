@@ -20,7 +20,14 @@ from app.modals.configuration import (
     PricesModal,
 )
 from app.modals.staff import CloseSaleModal, NotifyCustomerModal
-from app.utils.embeds import build_panel_embed, build_sale_embed
+from app.utils.embeds import (
+    build_customer_dm_embed,
+    build_panel_embed,
+    build_profile_embed,
+    build_queue_embed,
+    build_sale_embed,
+)
+from app.utils.config_embeds import build_config_embed, configuration_readiness
 from app.utils.mentions import allowed_user_mentions
 from app.views.configuration import (
     AppearanceConfigView,
@@ -33,6 +40,7 @@ from app.views.configuration import (
     RolesConfigView,
 )
 from app.views.panel import PanelView
+from app.views.links import TicketLinkView
 from app.views.sale import (
     AnalysisSaleView,
     PaidSaleView,
@@ -136,19 +144,33 @@ class PersistentViewTests(unittest.TestCase):
 
         self.assertEqual(
             labels(waiting),
-            ["Editar carrinho", "Cancelar venda", "Assumir", "Ações"],
+            [
+                "Editar carrinho",
+                "Assumir",
+                "Cancelar venda",
+                "Ações da equipe",
+            ],
         )
         self.assertEqual(
             labels(analysis),
-            ["Editar carrinho", "Cancelar venda", "Continuar para pagamento", "Ações"],
+            [
+                "Editar carrinho",
+                "Continuar para pagamento",
+                "Cancelar venda",
+                "Ações da equipe",
+            ],
         )
         self.assertEqual(
             labels(payment),
-            ["Confirmar pagamento", "Ações"],
+            ["Confirmar pagamento", "Ações da equipe"],
         )
         self.assertEqual([item.label for item in paid.children], ["Finalizar venda"])
-        self.assertEqual(waiting.children[1].style, discord.ButtonStyle.danger)
-        self.assertEqual(analysis.children[1].style, discord.ButtonStyle.danger)
+        self.assertEqual(waiting.children[1].style, discord.ButtonStyle.primary)
+        self.assertEqual(waiting.children[2].style, discord.ButtonStyle.danger)
+        self.assertEqual(analysis.children[1].style, discord.ButtonStyle.primary)
+        self.assertEqual(analysis.children[2].style, discord.ButtonStyle.danger)
+        self.assertEqual({item.row for item in waiting.children}, {0, 1, 2})
+        self.assertEqual({item.row for item in analysis.children}, {0, 1, 2})
 
     def test_disabled_customer_features_are_hidden(self) -> None:
         settings = GuildSettings.from_mapping(
@@ -169,7 +191,9 @@ class PersistentViewTests(unittest.TestCase):
         )
         for view in (waiting, analysis, payment):
             staff_menu = next(
-                item for item in view.children if getattr(item, "placeholder", None) == "Ações"
+                item
+                for item in view.children
+                if getattr(item, "placeholder", None) == "Ações da equipe"
             )
             self.assertNotIn("notify", [option.value for option in staff_menu.options])
 
@@ -179,6 +203,19 @@ class PersistentViewTests(unittest.TestCase):
         self.assertEqual(labels, ["Gmails", "Chave Pix", "Nome do titular"])
         forbidden = {"senha", "2fa", "cookie", "token", "código de recuperação"}
         self.assertFalse(any(term in " ".join(labels).lower() for term in forbidden))
+        self.assertEqual(
+            modal.children[0].description,
+            "Um endereço por linha. Nunca envie senha.",
+        )
+
+    def test_ticket_link_view_is_small_and_uses_a_real_link_button(self) -> None:
+        view = TicketLinkView("https://discord.com/channels/1/2")
+        self.assertEqual(len(view.children), 1)
+        button = view.children[0]
+        self.assertEqual(button.label, "Abrir atendimento")
+        self.assertEqual(button.style, discord.ButtonStyle.link)
+        self.assertEqual(button.url, "https://discord.com/channels/1/2")
+        self.assertIsNone(button.custom_id)
 
     def test_concurrent_modals_receive_unique_dispatch_ids(self) -> None:
         constructors = (
@@ -237,6 +274,17 @@ class PersistentViewTests(unittest.TestCase):
             ids = [item.custom_id for item in view.children]
             self.assertEqual(len(ids), len(set(ids)), type(view).__name__)
 
+    def test_botconfig_summarizes_readiness_without_extra_controls(self) -> None:
+        passed, total, missing = configuration_readiness(self.settings)
+        self.assertEqual((passed, total), (1, 7))
+        self.assertIn("canal do painel", missing)
+        embed = build_config_embed(self.settings)
+        self.assertIn("1/7", embed.description)
+        self.assertEqual(
+            [field.name for field in embed.fields],
+            ["Operação", "Estrutura", "Registros"],
+        )
+
 
 class EmbedTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -244,9 +292,9 @@ class EmbedTests(unittest.TestCase):
 
     def test_panel_embed_is_compact_and_branded(self) -> None:
         embed = build_panel_embed(self.settings)
-        self.assertEqual(embed.title, "Venda seus G-mails para a SK Store")
+        self.assertEqual(embed.title, "Venda contas Gmail para a SK Store")
         self.assertEqual(embed.fields[0].name, "Valor por conta")
-        self.assertEqual(embed.fields[0].value, "R$ 2,00")
+        self.assertEqual(embed.fields[0].value, "**R$ 2,00**")
 
     def test_panel_embed_stays_within_discord_aggregate_limit(self) -> None:
         settings = GuildSettings.from_mapping(
@@ -269,23 +317,51 @@ class EmbedTests(unittest.TestCase):
 
     def test_cart_and_payment_embeds(self) -> None:
         accounts = sample_accounts()
-        cart = build_sale_embed(
-            sample_sale(SaleStatus.WAITING), accounts, self.settings
-        )
+        waiting_sale = sample_sale(SaleStatus.WAITING)
+        cart = build_sale_embed(waiting_sale, accounts, self.settings)
         fields = {field.name: field.value for field in cart.fields}
         self.assertEqual(cart.title, "Venda #0042 · Aguardando")
-        self.assertIn("**Resumo:** 3 contas · R$ 2,00/un", cart.description)
-        self.assertIn("**Total:** R$ 6,00", cart.description)
-        self.assertIn("**Pix:** `cliente@pix.com`", fields["Pagamento"])
-        self.assertTrue(any(name.startswith("G-mails · 3") for name in fields))
-        self.assertLessEqual(len(cart.fields), 3)
+        self.assertIn("**3 contas · R$ 2,00 cada**", cart.description)
+        self.assertIn("Total a receber: **R$ 6,00**", cart.description)
+        self.assertIn(
+            "**Chave:** `cliente@pix.com`",
+            fields["Recebimento via Pix"],
+        )
+        self.assertTrue(
+            any(name.startswith("Contas enviadas · 3") for name in fields)
+        )
+        self.assertLessEqual(len(cart.fields), 2)
+        self.assertEqual(cart.timestamp, waiting_sale.updated_at)
 
         payment = build_sale_embed(
             sample_sale(SaleStatus.PAYMENT), accounts, self.settings
         )
         self.assertEqual(payment.title, "Venda #0042 · Pagamento")
         self.assertEqual(len(payment.fields), 1)
-        self.assertFalse(any(field.name.startswith("G-mails") for field in payment.fields))
+        self.assertFalse(
+            any(field.name.startswith("Contas enviadas") for field in payment.fields)
+        )
+
+        terminal = build_sale_embed(
+            sample_sale(SaleStatus.FINALIZED), accounts, self.settings
+        )
+        self.assertFalse(
+            any(field.name.startswith("Contas enviadas") for field in terminal.fields)
+        )
+
+        delete_at = datetime.now(UTC)
+        terminal_with_deadline = build_sale_embed(
+            replace(
+                sample_sale(SaleStatus.CLOSED),
+                ticket_delete_at=delete_at,
+            ),
+            accounts,
+            self.settings,
+        )
+        self.assertIn(
+            f"<t:{int(delete_at.timestamp())}:R>",
+            terminal_with_deadline.description,
+        )
 
     def test_sale_embed_uses_configured_logo_as_thumbnail(self) -> None:
         settings = GuildSettings.from_mapping(
@@ -302,6 +378,67 @@ class EmbedTests(unittest.TestCase):
         self.assertFalse(mentions.values["roles"])
         self.assertFalse(mentions.values["replied_user"])
         self.assertEqual([user.id for user in mentions.values["users"]], [123])
+
+    def test_customer_dm_is_branded_without_a_fake_user_mention(self) -> None:
+        embed = build_customer_dm_embed(
+            sample_sale(SaleStatus.ANALYSIS),
+            self.settings,
+            "Sua venda precisa da sua atenção.",
+            staff_name="Atendente",
+        )
+        self.assertEqual(embed.title, "SK Store · Venda #0042")
+        self.assertEqual(embed.description, "Sua venda precisa da sua atenção.")
+        self.assertNotIn("<@", embed.description)
+        self.assertIn("Atendente", embed.footer.text)
+
+    def test_profile_and_queue_embeds_are_grouped_and_compact(self) -> None:
+        now = datetime.now(UTC)
+        profile = {
+            "completed_sales": 12,
+            "sold_accounts": 48,
+            "received_cents": 9_600,
+            "cancelled_sales": 2,
+            "recent": [
+                {
+                    "id": 42,
+                    "status": SaleStatus.FINALIZED.value,
+                    "unit_price_cents": 200,
+                    "account_count": 3,
+                    "created_at": now.isoformat(),
+                }
+            ],
+        }
+        profile_embed = build_profile_embed(profile, 100, self.settings)
+        self.assertEqual(len(profile_embed.fields), 4)
+        self.assertIn("Vendas canceladas: **2**", profile_embed.description)
+
+        rows = [
+            {
+                "id": 42,
+                "status": SaleStatus.WAITING.value,
+                "customer_id": 100,
+                "responsible_staff_id": None,
+                "unit_price_cents": 200,
+                "account_count": 3,
+                "channel_id": 200,
+                "created_at": now.isoformat(),
+            },
+            {
+                "id": 43,
+                "status": SaleStatus.ANALYSIS.value,
+                "customer_id": 101,
+                "responsible_staff_id": 500,
+                "unit_price_cents": 200,
+                "account_count": 2,
+                "channel_id": 201,
+                "created_at": now.isoformat(),
+            },
+        ]
+        queue_embed = build_queue_embed(rows, self.settings)
+        self.assertEqual(queue_embed.title, "Fila de vendas · 2")
+        self.assertEqual(len(queue_embed.fields), 2)
+        self.assertEqual(queue_embed.fields[0].name, "Aguardando · 1")
+        self.assertEqual(queue_embed.fields[1].name, "Em análise · 1")
 
     def test_cart_embed_stays_within_discord_limits_at_maximum(self) -> None:
         now = datetime.now(UTC)

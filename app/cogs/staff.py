@@ -6,8 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from app.constants import STATUS_LABELS, SaleStatus
-from app.utils.money import format_brl
+from app.utils.embeds import build_queue_embed
 from app.utils.permissions import require_staff
 
 if TYPE_CHECKING:
@@ -39,23 +38,5 @@ class StaffCog(commands.Cog):
         except Exception as exc:
             await self.bot.handle_user_exception(interaction, exc)
             return
-        lines: list[str] = []
-        for row in rows:
-            status = SaleStatus(str(row["status"]))
-            count = int(row["account_count"])
-            total = count * int(row["unit_price_cents"])
-            line = (
-                f"#{int(row['id']):04d} · {STATUS_LABELS[status]} · "
-                f"<@{int(row['customer_id'])}> · {count} conta(s) · "
-                f"{format_brl(total)}"
-            )
-            if row["channel_id"]:
-                line += f" · <#{int(row['channel_id'])}>"
-            lines.append(line)
-        embed = discord.Embed(
-            title="Fila de vendas",
-            description="\n".join(lines) if lines else "Nenhuma venda na fila.",
-            colour=settings.embed_color,
-        )
-        embed.set_footer(text=f"Exibindo {len(lines)} venda(s)")
+        embed = build_queue_embed(rows, settings)
         await interaction.followup.send(embed=embed, ephemeral=True)

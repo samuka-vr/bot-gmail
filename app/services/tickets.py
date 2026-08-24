@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import re
+
 import discord
 
 from app.constants import SALE_TOPIC_PREFIX, TERMINAL_STATUSES
@@ -13,11 +16,24 @@ from app.models import GuildSettings, Sale
 from app.services.sales import SaleService
 
 
+LOGGER = logging.getLogger(__name__)
+_SALE_TOPIC_RE = re.compile(
+    r"^Atendimento privado · Venda #(?P<sale_id>\d+) · SK Store$"
+)
+
+
+def format_sale_topic(sale_id: int) -> str:
+    return f"Atendimento privado · Venda #{sale_id:04d} · SK Store"
+
+
 def topic_matches_sale(topic: str | None, sale_id: int) -> bool:
     if not topic:
         return False
     marker = topic.partition("|")[0].strip()
-    return marker == f"{SALE_TOPIC_PREFIX}{sale_id}"
+    if marker == f"{SALE_TOPIC_PREFIX}{sale_id}":
+        return True
+    match = _SALE_TOPIC_RE.fullmatch(topic.strip())
+    return bool(match and int(match.group("sale_id")) == sale_id)
 
 
 class TicketService:
@@ -115,6 +131,16 @@ class TicketService:
                 overwrite=discord.PermissionOverwrite(**values),
                 reason=reason,
             )
+
+        expected_topic = format_sale_topic(sale.id)
+        if channel.topic != expected_topic:
+            try:
+                await channel.edit(topic=expected_topic, reason=reason)
+            except (discord.Forbidden, discord.HTTPException):
+                LOGGER.warning(
+                    "Não foi possível atualizar o tópico da venda %s",
+                    sale.id,
+                )
 
     async def sync_guild_permissions(
         self, guild: discord.Guild, settings: GuildSettings
@@ -252,7 +278,6 @@ class TicketService:
                 return fetched
             stale_channel = True
 
-        topic_marker = f"{SALE_TOPIC_PREFIX}{sale.id}"
         for channel in category.text_channels:
             if topic_matches_sale(channel.topic, sale.id):
                 await self.sales.attach_channel(
@@ -313,7 +338,7 @@ class TicketService:
             name=name,
             category=category,
             overwrites=overwrites,
-            topic=f"{topic_marker} | Cliente={sale.customer_id}",
+            topic=format_sale_topic(sale.id),
             reason=f"SK Store: venda #{sale.id:04d}",
         )
         try:

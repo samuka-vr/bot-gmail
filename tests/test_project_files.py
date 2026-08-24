@@ -23,6 +23,17 @@ class ProjectFileTests(unittest.TestCase):
                 "python-dotenv==1.2.3",
             ],
         )
+        ignored = {
+            line.strip()
+            for line in (ROOT / ".discloudignore").read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip() and not line.startswith("#")
+        }
+        self.assertIn("tests", ignored)
+        self.assertIn("__pycache__", ignored)
+        self.assertNotIn(".env", ignored)
+        self.assertFalse(any("*" in entry for entry in ignored))
 
     def test_env_and_database_are_ignored(self) -> None:
         gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")

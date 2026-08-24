@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import discord
@@ -12,6 +14,9 @@ from app.views.panel import PanelView
 
 if TYPE_CHECKING:
     from app.bot import SKStoreBot
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PanelService:
@@ -30,6 +35,7 @@ class PanelService:
         self, guild: discord.Guild, actor_id: int | None
     ) -> tuple[discord.Message, bool]:
         settings = await self.db.get_settings(guild.id)
+        await self.bot.tickets.validate_configuration(guild, settings)
         if not settings.panel_channel_id:
             raise MissingConfiguration("Configure o canal do painel em /botconfig.")
         channel = guild.get_channel(settings.panel_channel_id)
@@ -43,6 +49,39 @@ class PanelService:
 
         embed = build_panel_embed(settings)
         view = PanelView(self.bot, settings)
+        fallback_view = PanelView(
+            self.bot,
+            replace(settings, icon_sell_id=None),
+        )
+
+        async def send_panel(
+            destination: discord.TextChannel,
+        ) -> discord.Message:
+            try:
+                return await destination.send(embed=embed, view=view)
+            except discord.Forbidden:
+                raise
+            except discord.HTTPException:
+                if not settings.icon_sell_id:
+                    raise
+                LOGGER.warning("Publicando painel sem ícone personalizado")
+                return await destination.send(embed=embed, view=fallback_view)
+
+        async def edit_panel(target: discord.Message) -> None:
+            try:
+                await target.edit(embed=embed, view=view, content=None)
+            except discord.Forbidden:
+                raise
+            except discord.HTTPException:
+                if not settings.icon_sell_id:
+                    raise
+                LOGGER.warning("Atualizando painel sem ícone personalizado")
+                await target.edit(
+                    embed=embed,
+                    view=fallback_view,
+                    content=None,
+                )
+
         message: discord.Message | None = None
         created = False
         if settings.panel_message_id:
@@ -78,7 +117,7 @@ class PanelService:
                     "Não consegui consultar a mensagem atual do painel."
                 ) from exc
         if message and message.channel.id == channel.id:
-            await message.edit(embed=embed, view=view, content=None)
+            await edit_panel(message)
             await self.db.set_settings(
                 guild.id,
                 {
@@ -88,7 +127,7 @@ class PanelService:
                 actor_id,
             )
         elif message:
-            replacement = await channel.send(embed=embed, view=view)
+            replacement = await send_panel(channel)
             try:
                 await self.db.set_settings(
                     guild.id,
@@ -127,7 +166,7 @@ class PanelService:
             message = replacement
             created = True
         else:
-            message = await channel.send(embed=embed, view=view)
+            message = await send_panel(channel)
             try:
                 await self.db.set_settings(
                     guild.id,

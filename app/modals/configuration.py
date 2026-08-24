@@ -456,7 +456,7 @@ class GeneralSettingsModal(_ConfigModal):
         )
         self.close_delay = _add_text_input(
             self,
-            "Auto-close em minutos",
+            "Fechamento automático em minutos",
             default=str(max(settings.auto_close_delay // 60, 1)),
             max_length=5,
             custom_id="sk:config:general:close_delay",

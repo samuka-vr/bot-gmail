@@ -11,12 +11,17 @@ Painel → formulário → ticket/carrinho → Staff assume → pagamento → co
 ```
 
 - Painel público com um único botão.
-- Carrinho editável antes do pagamento.
+- Carrinho compacto e editável antes do pagamento.
 - Código temporário de verificação no formato `SK-48321`.
 - Claim e ownership de Staff, com override de Admin/Manager.
 - Pagamento e verificação sempre manuais.
 - Transcript HTML, logs, perfil, fila e configuração dentro do Discord.
 - SQLite persistente e Views restauradas depois de reinícios.
+
+No ticket existe apenas uma mensagem permanente de fluxo. O bot atualiza o
+mesmo embed entre carrinho, análise, pagamento e encerramento, sem empilhar
+interfaces antigas. Em telas pequenas, cliente, código, quantidade e total
+ficam no resumo; Pix e contas ficam agrupados logo abaixo.
 
 ## Requisitos
 
@@ -115,7 +120,7 @@ Ordem recomendada:
 4. **Painel** — revise título, descrição, rodapé, botão e texto do preço.
 5. **Aparência** — configure cor, logo, banner e IDs opcionais de emojis customizados.
 6. **Mensagem do carrinho** — ajuste texto, destino e auto-delete.
-7. **Logs** e **Configurações gerais** — revise toggles, prefixo, limite e auto-close. O padrão fecha tickets terminais após 1 minuto.
+7. **Logs** e **Configurações gerais** — revise toggles, prefixo, limite e fechamento automático. O padrão fecha tickets terminais após 1 minuto.
 8. **Diagnóstico** — corrija qualquer item com `FALHA`.
 9. **Publicar / Atualizar painel** — publique somente após o diagnóstico.
 
@@ -143,7 +148,10 @@ Placeholders disponíveis:
 
 Destinos possíveis: ticket, DM ou ambos. O auto-delete se aplica à mensagem enviada no ticket. O prazo fica persistido e sobrevive a reinícios.
 
-As DMs permitem somente a menção do próprio cliente. O Discord ainda pode não emitir uma notificação push conforme as preferências do usuário, mas a mensagem continua sendo entregue normalmente quando a DM está aberta.
+Na DM, o bot não imprime uma falsa menção como `<@cliente>`. Ele envia uma
+mensagem visual da SK Store e um botão **Abrir atendimento** com link direto
+para o ticket. A própria chegada da DM é a notificação; o aviso push ainda
+depende das preferências do cliente no Discord.
 
 ## Verificação manual e segurança
 
@@ -162,7 +170,8 @@ Senhas e segredos de autenticação não têm campo no banco, nos modais ou nos 
 
 ## Transcripts e logs
 
-O transcript é um HTML com CSS embutido, escrito incrementalmente para não manter o histórico inteiro na RAM. Ele inclui:
+O transcript é um HTML com CSS embutido e a cor configurada da SK Store,
+escrito incrementalmente para não manter o histórico inteiro na RAM. Ele inclui:
 
 - mensagens ainda existentes no ticket;
 - autores e timestamps;
@@ -172,7 +181,9 @@ O transcript é um HTML com CSS embutido, escrito incrementalmente para não man
 
 O arquivo temporário é removido após o envio. Se o transcript falhar, a venda permanece finalizada e uma falha técnica é registrada.
 
-Logs não exibem senhas ou tokens. Adição/remoção de Gmail é registrada por quantidade; a lista completa permanece na venda e no transcript autorizado.
+Logs são compactos e não exibem a lista de contas, senhas ou tokens.
+Adição/remoção de Gmail é registrada por quantidade; a lista completa
+permanece na venda e no transcript autorizado.
 
 Restrinja os canais de logs e transcripts à equipe. Se alguém publicar credenciais por conta própria no ticket, remova a mensagem imediatamente; o bot avisa no carrinho que senhas e códigos de acesso não devem ser enviados.
 
@@ -198,7 +209,9 @@ python -m compileall -q .
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-A suíte cobre validação, centavos, migrações, duplicidade, idempotência, carrinho, ownership, estados, perfil, fila, deadlines, transcript, embeds, Views, componentes, comandos e arquivos de implantação.
+A suíte cobre validação, centavos, migrações, duplicidade, idempotência,
+carrinho, ownership, estados, perfil, fila, prazos, transcript, logs, embeds,
+Views, componentes, comandos e arquivos de implantação.
 
 Antes de produção, faça um teste ao vivo em servidor privado com dois usuários de Staff e um cliente. Confirme também DM fechada, permissões removidas e restart durante uma venda ativa.
 
@@ -214,6 +227,11 @@ RAM=100
 VERSION=latest
 AUTORESTART=true
 ```
+
+O `.discloudignore` também está pronto e usa apenas nomes exatos, como exige
+a sintaxe atual da Discloud. Ele evita enviar testes, documentação, caches e
+ambientes virtuais no Auto Deploy; o código do bot e as migrações continuam no
+pacote.
 
 Para upload manual, compacte o conteúdo da raiz do projeto. `main.py`, `requirements.txt` e `discloud.config` devem aparecer diretamente na raiz do ZIP, sem uma pasta externa adicional.
 
@@ -244,7 +262,9 @@ O uso real varia com a quantidade de servidores, canais e atividade. O alvo é u
 - Mensagens apagadas antes da finalização não aparecem no transcript.
 - Anexos são referenciados por URL; não são baixados nem duplicados.
 - DM depende das configurações de privacidade do cliente.
-- Auto-close vem ativo com prazo padrão de 1 minuto, pode ser desligado em `/botconfig` e nunca apaga o registro SQLite.
+- O fechamento automático vem ativo com prazo padrão de 1 minuto, pode ser desligado em `/botconfig` e nunca apaga o registro SQLite.
+- O prazo começa depois que transcript, logs e bloqueio do ticket terminam. O embed final mostra a contagem regressiva e o agendador retoma o prazo após um reinício.
+- O bloco nativo “Bem-vindo(a) ao canal” é desenhado pelo Discord e não pode ser removido pelo bot. O tópico do ticket foi mantido curto e legível, sem expor o ID bruto do cliente.
 
 ## Referências oficiais
 

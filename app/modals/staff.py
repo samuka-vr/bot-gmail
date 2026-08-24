@@ -40,7 +40,11 @@ class NotifyCustomerModal(discord.ui.Modal, title="Notificar cliente"):
         except Exception as exc:
             await self.bot.handle_user_exception(interaction, exc)
             return
-        text = "Cliente notificado." if sent else "A DM do cliente está fechada."
+        text = (
+            "Mensagem enviada por DM."
+            if sent
+            else "Não consegui enviar a DM. O cliente pode estar com mensagens privadas fechadas."
+        )
         await interaction.followup.send(text, ephemeral=True)
 
 

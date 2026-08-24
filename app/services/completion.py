@@ -24,7 +24,7 @@ class CompletionService:
         channel: discord.TextChannel,
         sale: Sale,
         settings: GuildSettings,
-    ) -> None:
+    ) -> Sale:
         if settings.transcripts_enabled and not sale.transcript_sent_at:
             try:
                 await self.bot.transcripts.create_and_send(
@@ -52,12 +52,13 @@ class CompletionService:
             and refreshed.ticket_delete_at is None
             and refreshed.ticket_deleted_at is None
         ):
-            terminal_at = sale.completed_at or sale.closed_at or datetime.now(UTC)
-            delete_at = terminal_at + timedelta(
+            delete_at = datetime.now(UTC) + timedelta(
                 seconds=max(settings.auto_close_delay, 30)
             )
             await self.bot.database.set_ticket_delete_at(
                 sale.id, delete_at.isoformat()
             )
             self.bot.maintenance.notify()
+            refreshed = await self.bot.database.get_sale(sale.id) or refreshed
         await self.bot.database.mark_terminal_processed(sale.id)
+        return refreshed or sale

@@ -32,7 +32,7 @@ class TranscriptService:
         settings: GuildSettings,
     ) -> discord.Message:
         destination = await self._destination(ticket.guild, settings)
-        path = await self._write_html(ticket, sale)
+        path = await self._write_html(ticket, sale, settings)
         try:
             message = await destination.send(
                 content=f"Transcript · Venda #{sale.id:04d}",
@@ -69,7 +69,10 @@ class TranscriptService:
         return channel
 
     async def _write_html(
-        self, ticket: discord.TextChannel, sale: Sale
+        self,
+        ticket: discord.TextChannel,
+        sale: Sale,
+        settings: GuildSettings | None = None,
     ) -> Path:
         descriptor, raw_path = tempfile.mkstemp(
             prefix=f"sk-transcript-{sale.id}-", suffix=".html"
@@ -80,7 +83,7 @@ class TranscriptService:
             file_object = os.fdopen(descriptor, "w", encoding="utf-8")
             descriptor = -1
             with file_object as output:
-                self._write_header(output, ticket, sale, accounts)
+                self._write_header(output, ticket, sale, accounts, settings)
                 async for message in ticket.history(
                     limit=None, oldest_first=True
                 ):
@@ -104,11 +107,13 @@ class TranscriptService:
         ticket: discord.TextChannel,
         sale: Sale,
         accounts: list[SaleAccount],
+        settings: GuildSettings | None = None,
     ) -> None:
         account_lines = "<br>".join(
             html.escape(account.email) for account in accounts
         )
         total = len(accounts) * sale.unit_price_cents
+        accent = f"#{settings.embed_color:06X}" if settings else "#5865F2"
 
         def timestamp(value: object) -> str:
             return html.escape(value.isoformat()) if value else "-"
@@ -117,7 +122,8 @@ class TranscriptService:
             "<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"
             f"<title>Venda #{sale.id:04d}</title><style>"
-            ":root{color-scheme:dark}body{margin:0;background:#111318;color:#edf0f5;"
+            f":root{{color-scheme:dark;--accent:{accent}}}"
+            "body{margin:0;background:#111318;color:#edf0f5;"
             "font:15px system-ui,-apple-system,sans-serif}main{max-width:900px;"
             "margin:auto;padding:24px}.card{background:#1b1f27;border:1px solid #303642;"
             "border-radius:12px;padding:18px;margin-bottom:18px}.meta{display:grid;"
@@ -125,11 +131,15 @@ class TranscriptService:
             "color:#9ca6b6;font-size:12px;text-transform:uppercase}.message{display:grid;"
             "grid-template-columns:170px 1fr;gap:14px;padding:14px 0;border-top:1px solid "
             "#2a303a}.author{font-weight:650}.time{color:#9ca6b6;font-size:12px}.body{"
-            "white-space:pre-wrap;word-break:break-word}a{color:#8ab4ff}.embed{"
-            "border-left:3px solid #6b7280;padding-left:10px;margin-top:8px}@media(max-width:"
+            "white-space:pre-wrap;word-break:break-word}a{color:var(--accent)}h1,h2{"
+            "margin-top:0}.sale-card{border-top:3px solid var(--accent)}.status{display:"
+            "inline-block;border:1px solid var(--accent);border-radius:999px;padding:4px 9px;"
+            "margin-bottom:14px}.embed{border-left:3px solid var(--accent);padding-left:"
+            "10px;margin-top:8px}@media(max-width:"
             "640px){main{padding:12px}.message{grid-template-columns:1fr;gap:5px}}"
             "</style></head><body><main>"
-            f"<section class='card'><h1>Venda #{sale.id:04d}</h1>"
+            f"<section class='card sale-card'><h1>Venda #{sale.id:04d}</h1>"
+            f"<div class='status'>{html.escape(STATUS_LABELS[sale.status])}</div>"
             "<div class='meta'>"
             f"<div><div class='label'>Ticket</div>{html.escape(ticket.name)}</div>"
             "<div><div class='label'>Status final</div>"

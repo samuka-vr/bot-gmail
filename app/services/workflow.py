@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -14,13 +15,14 @@ from app.exceptions import (
     SKStoreError,
 )
 from app.models import GuildSettings, Sale
-from app.utils.embeds import build_sale_embed
+from app.utils.embeds import build_customer_dm_embed, build_sale_embed
 from app.utils.money import format_brl
 from app.utils.mentions import allowed_user_mentions
 from app.utils.permissions import is_admin, require_staff
 from app.utils.text import truncate
 from app.utils.validation import ParsedEmail, render_cart_template
 from app.views.cart import CustomerCancelView, RemoveAccountView
+from app.views.links import TicketLinkView
 from app.views.sale import sale_view
 
 if TYPE_CHECKING:
@@ -140,6 +142,55 @@ class WorkflowService:
         accounts = await self.bot.database.get_accounts(sale.id)
         embed = build_sale_embed(sale, accounts, settings)
         view = sale_view(self.bot, sale.status, settings)
+        icons_configured = any(
+            (
+                settings.icon_edit_id,
+                settings.icon_staff_id,
+                settings.icon_payment_id,
+            )
+        )
+        fallback_settings = replace(
+            settings,
+            icon_edit_id=None,
+            icon_staff_id=None,
+            icon_payment_id=None,
+        )
+
+        async def edit_workflow(target: discord.Message) -> None:
+            try:
+                await target.edit(embed=embed, view=view, content=None)
+            except discord.Forbidden:
+                raise
+            except discord.HTTPException:
+                if not icons_configured:
+                    raise
+                LOGGER.warning(
+                    "Renderizando venda %s sem ícones personalizados",
+                    sale.id,
+                )
+                await target.edit(
+                    embed=embed,
+                    view=sale_view(self.bot, sale.status, fallback_settings),
+                    content=None,
+                )
+
+        async def send_workflow() -> discord.Message:
+            try:
+                return await channel.send(embed=embed, view=view)
+            except discord.Forbidden:
+                raise
+            except discord.HTTPException:
+                if not icons_configured:
+                    raise
+                LOGGER.warning(
+                    "Enviando venda %s sem ícones personalizados",
+                    sale.id,
+                )
+                return await channel.send(
+                    embed=embed,
+                    view=sale_view(self.bot, sale.status, fallback_settings),
+                )
+
         message: discord.Message | None = None
         stale_message_id: int | None = None
         if sale.workflow_message_id:
@@ -151,9 +202,9 @@ class WorkflowService:
             except (discord.Forbidden, discord.HTTPException):
                 raise
         if message:
-            await message.edit(embed=embed, view=view, content=None)
+            await edit_workflow(message)
         else:
-            message = await channel.send(embed=embed, view=view)
+            message = await send_workflow()
             try:
                 await self.bot.sales.attach_workflow_message(
                     sale.id,
@@ -175,7 +226,7 @@ class WorkflowService:
                 message = await channel.fetch_message(
                     current.workflow_message_id
                 )
-                await message.edit(embed=embed, view=view, content=None)
+                await edit_workflow(message)
         return message
 
     async def _send_cart_notice(
@@ -206,11 +257,24 @@ class WorkflowService:
         if settings.cart_message_target in {"ticket", "both"}:
             notice = await channel.send(content, allowed_mentions=allowed)
         if settings.cart_message_target in {"dm", "both"}:
-            dm_content = content.replace(channel.mention, ticket_url)
+            dm_values = {
+                **values,
+                "user": "Você",
+                "ticket": "seu atendimento",
+            }
+            dm_content = truncate(
+                render_cart_template(settings.cart_message_text, dm_values),
+                4_000,
+            )
             try:
                 await customer.send(
-                    dm_content,
-                    allowed_mentions=allowed,
+                    embed=build_customer_dm_embed(
+                        sale,
+                        settings,
+                        dm_content,
+                    ),
+                    view=TicketLinkView(ticket_url),
+                    allowed_mentions=discord.AllowedMentions.none(),
                 )
             except (discord.Forbidden, discord.HTTPException):
                 LOGGER.info("DM automática indisponível para venda %s", sale.id)
@@ -393,9 +457,10 @@ class WorkflowService:
                         f"<@{sale.customer_id}>, sua venda foi cancelada.",
                         "customer_cancel_notice",
                     )
-                await self.bot.completion.finish(
+                completed_sale = await self.bot.completion.finish(
                     interaction.channel, sale, settings
                 )
+                await self.render_terminal(interaction.channel, completed_sale)
 
     async def lock_ticket(
         self,
@@ -649,8 +714,11 @@ class WorkflowService:
                             "finalized_notice",
                         )
                     await self.render_terminal(interaction.channel, sale)
-                    await self.bot.completion.finish(
+                    completed_sale = await self.bot.completion.finish(
                         interaction.channel, sale, settings
+                    )
+                    await self.render_terminal(
+                        interaction.channel, completed_sale
                     )
         except Exception as exc:
             await self.bot.handle_user_exception(interaction, exc)
@@ -694,9 +762,14 @@ class WorkflowService:
                 if customer is None:
                     customer = await self.bot.fetch_user(sale.customer_id)
                 await customer.send(
-                    f"<@{sale.customer_id}>, {message}\n\n"
-                    f"Volte ao atendimento: {ticket_url}",
-                    allowed_mentions=allowed_user_mentions(sale.customer_id),
+                    embed=build_customer_dm_embed(
+                        sale,
+                        settings,
+                        message,
+                        staff_name=member.display_name,
+                    ),
+                    view=TicketLinkView(ticket_url),
+                    allowed_mentions=discord.AllowedMentions.none(),
                 )
             except (discord.Forbidden, discord.NotFound):
                 return False
@@ -743,6 +816,7 @@ class WorkflowService:
                         "staff_close_notice",
                     )
                 await self.render_terminal(interaction.channel, sale)
-                await self.bot.completion.finish(
+                completed_sale = await self.bot.completion.finish(
                     interaction.channel, sale, settings
                 )
+                await self.render_terminal(interaction.channel, completed_sale)

@@ -99,22 +99,56 @@ class MainConfigSelect(discord.ui.Select):
             placeholder="Configurar bot",
             custom_id="sk:config:main:select",
             options=[
-                discord.SelectOption(label="Painel", value="panel"),
-                discord.SelectOption(label="Canais", value="channels"),
-                discord.SelectOption(label="Cargos", value="roles"),
-                discord.SelectOption(label="Preços", value="prices"),
-                discord.SelectOption(label="Aparência", value="appearance"),
                 discord.SelectOption(
-                    label="Mensagem do carrinho", value="cart_message"
-                ),
-                discord.SelectOption(label="Logs", value="logs"),
-                discord.SelectOption(
-                    label="Configurações gerais", value="general"
+                    label="Painel",
+                    value="panel",
+                    description="Textos, rodapé e botão público.",
                 ),
                 discord.SelectOption(
-                    label="Publicar / Atualizar painel", value="publish"
+                    label="Canais",
+                    value="channels",
+                    description="Painel, tickets, logs e transcripts.",
                 ),
-                discord.SelectOption(label="Diagnóstico", value="diagnostic"),
+                discord.SelectOption(
+                    label="Cargos",
+                    value="roles",
+                    description="Staff e Admin/Manager.",
+                ),
+                discord.SelectOption(
+                    label="Preços",
+                    value="prices",
+                    description="Valor e limites por venda.",
+                ),
+                discord.SelectOption(
+                    label="Aparência",
+                    value="appearance",
+                    description="Cor, logo, banner e ícones.",
+                ),
+                discord.SelectOption(
+                    label="Mensagem do carrinho",
+                    value="cart_message",
+                    description="Texto, destino e auto-delete.",
+                ),
+                discord.SelectOption(
+                    label="Logs",
+                    value="logs",
+                    description="Eventos e transcripts.",
+                ),
+                discord.SelectOption(
+                    label="Configurações gerais",
+                    value="general",
+                    description="Limites, DMs e fechamento.",
+                ),
+                discord.SelectOption(
+                    label="Publicar / Atualizar painel",
+                    value="publish",
+                    description="Crie ou edite a mensagem salva.",
+                ),
+                discord.SelectOption(
+                    label="Diagnóstico",
+                    value="diagnostic",
+                    description="Confira configuração e permissões.",
+                ),
             ],
         )
         self.bot = bot
@@ -127,11 +161,7 @@ class MainConfigSelect(discord.ui.Select):
         action = self.values[0]
         if action == "panel":
             await interaction.response.edit_message(
-                embed=build_section_embed(
-                    settings,
-                    "Painel",
-                    "Edite os textos ou o destaque do painel público.",
-                ),
+                embed=panel_config_embed(settings),
                 view=PanelConfigView(self.bot, self.owner_id, settings),
             )
         elif action == "channels":
@@ -148,12 +178,7 @@ class MainConfigSelect(discord.ui.Select):
             await interaction.response.send_modal(PricesModal(self.bot, settings))
         elif action == "appearance":
             await interaction.response.edit_message(
-                embed=build_section_embed(
-                    settings,
-                    "Aparência",
-                    f"Cor atual: #{settings.embed_color:06X}\n"
-                    "Logo, banner e ícones customizados são opcionais.",
-                ),
+                embed=appearance_embed(settings),
                 view=AppearanceConfigView(self.bot, self.owner_id, settings),
             )
         elif action == "cart_message":
@@ -207,6 +232,18 @@ class BotConfigView(ConfigView):
     def __init__(self, bot: "SKStoreBot", owner_id: int) -> None:
         super().__init__(bot, owner_id)
         self.add_item(MainConfigSelect(bot, owner_id))
+
+
+def panel_config_embed(settings: GuildSettings) -> discord.Embed:
+    return build_section_embed(
+        settings,
+        "Painel",
+        f"**Título:** {settings.panel_title}\n"
+        f"**Botão:** {settings.panel_button_text}\n"
+        f"**Destaque:** {settings.panel_price_label} · "
+        f"{format_brl(settings.unit_price_cents)}\n"
+        f"**Rodapé:** {settings.panel_footer or 'Sem rodapé'}",
+    )
 
 
 class PanelConfigView(ConfigView):
@@ -470,6 +507,26 @@ class AppearanceConfigView(ConfigView):
         )
 
 
+def appearance_embed(settings: GuildSettings) -> discord.Embed:
+    icons = sum(
+        bool(value)
+        for value in (
+            settings.icon_sell_id,
+            settings.icon_edit_id,
+            settings.icon_staff_id,
+            settings.icon_payment_id,
+        )
+    )
+    return build_section_embed(
+        settings,
+        "Aparência",
+        f"Cor: **#{settings.embed_color:06X}**\n"
+        f"Logo: {'Configurada' if settings.logo_url else 'Não configurada'}\n"
+        f"Banner: {'Configurado' if settings.banner_url else 'Não configurado'}\n"
+        f"Ícones personalizados: {icons}/4",
+    )
+
+
 def cart_message_embed(settings: GuildSettings) -> discord.Embed:
     target_label = {
         "ticket": "Ticket",
@@ -713,13 +770,18 @@ class LogsConfigView(ConfigView):
 
 
 def general_embed(settings: GuildSettings) -> discord.Embed:
+    delay = (
+        f"{settings.auto_close_delay} s"
+        if settings.auto_close_delay < 60
+        else f"{settings.auto_close_delay // 60} min"
+    )
     return build_section_embed(
         settings,
         "Configurações gerais",
         f"Prefixo: {settings.ticket_prefix}\n"
         f"Vendas ativas por cliente: {settings.max_active_sales}\n"
-        f"Auto-close: {'Ativo' if settings.auto_close_enabled else 'Desativado'}\n"
-        f"Prazo: {settings.auto_close_delay // 60} min",
+        f"Excluir tickets: {'Ativo' if settings.auto_close_enabled else 'Desativado'}\n"
+        f"Prazo: {delay}",
     )
 
 
@@ -747,7 +809,7 @@ class GeneralToggleSelect(discord.ui.Select):
         labels = {
             "cancellation": "Cancelamento pelo cliente",
             "dm": "Notificações por DM",
-            "auto_close": "Auto-close",
+            "auto_close": "Fechamento automático",
             "rename": "Renomear tickets encerrados",
             "transcripts": "Transcripts",
             "cart": "Mensagem automática do carrinho",

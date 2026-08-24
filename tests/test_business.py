@@ -58,7 +58,7 @@ class BusinessFlowTests(unittest.IsolatedAsyncioTestCase):
         row = await self.db.fetchone(
             "SELECT COUNT(*) AS total FROM schema_migrations"
         )
-        self.assertEqual(row["total"], 7)
+        self.assertEqual(row["total"], 8)
         self.assertTrue(await self.db.writable_check())
         settings = await self.db.get_settings(1)
         self.assertTrue(settings.auto_close_enabled)
@@ -100,6 +100,38 @@ class BusinessFlowTests(unittest.IsolatedAsyncioTestCase):
         settings = await self.db.get_settings(1)
         self.assertTrue(settings.auto_close_enabled)
         self.assertEqual(settings.auto_close_delay, 60)
+
+    async def test_v12_copy_migration_updates_only_legacy_defaults(self) -> None:
+        await self.db.set_settings(
+            1,
+            {
+                "panel_title": "Venda seus G-mails para a SK Store",
+                "panel_description": (
+                    "Venda G-mails que você não usa mais ou crie novas contas para vender.\n\n"
+                    "Pagamento via Pix."
+                ),
+                "cart_message_text": (
+                    "{user}, seu carrinho foi criado. Confira seus dados abaixo."
+                ),
+            },
+            actor_id=999,
+        )
+        await self.db.connection.execute(
+            "DELETE FROM schema_migrations WHERE version = 8"
+        )
+        await self.db.connection.commit()
+        await self.db.close()
+        await self.db.start()
+
+        settings = await self.db.get_settings(1)
+        self.assertEqual(
+            settings.panel_title,
+            "Venda contas Gmail para a SK Store",
+        )
+        self.assertEqual(
+            settings.cart_message_text,
+            "{user}, seu carrinho está pronto. Confira os dados abaixo.",
+        )
 
     async def test_create_sale_is_idempotent(self) -> None:
         interaction_id = self.next_id()
@@ -462,9 +494,17 @@ class BusinessFlowTests(unittest.IsolatedAsyncioTestCase):
             interaction_id=self.next_id(),
             settings=self.settings,
         )
+        third, _ = await self.create("perfil4@gmail.com")
+        await self.sales.close_by_staff(
+            sale_id=third.id,
+            staff_id=10,
+            is_admin=False,
+            reason="Conta não elegível.",
+            interaction_id=self.next_id(),
+        )
         profile = await self.db.get_profile(1, 100)
         self.assertEqual(profile["completed_sales"], 1)
-        self.assertEqual(profile["closed_sales"], 1)
+        self.assertEqual(profile["cancelled_sales"], 1)
         self.assertEqual(profile["sold_accounts"], 2)
         self.assertEqual(profile["received_cents"], 400)
 

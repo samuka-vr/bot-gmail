@@ -1,0 +1,16 @@
+# Arquivos usados apenas no desenvolvimento
+.git
+.github
+tests
+docs
+upload
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.venv
+venv
+delivery_v11
+delivery_v11_env
+delivery_with_env
+

@@ -17,7 +17,7 @@ Este documento congela as decisões de produto antes da implementação. O bot �
 
 1. **Painel público** — Embed V1 com logo, banner, título, descrição, informação curta, preço, rodapé e apenas `Vender Gmail`.
 2. **Modal de venda** — `Gmails`, `Chave Pix`, `Nome do titular`.
-3. **Ticket / carrinho** — embed mobile-first com estado no título, resumo curto no corpo, Pix/titular agrupados e uma lista compacta de contas. Controles: Select `Editar carrinho` e botão Danger `Cancelar venda`.
+3. **Ticket / carrinho** — embed mobile-first com cliente, código, quantidade e total no resumo; Pix/titular em um campo e contas em outro. Controles: Select `Editar carrinho`; na linha seguinte, a ação principal da equipe e `Cancelar venda`; por último, Select `Ações da equipe`.
 4. **Adicionar Gmail** — modal curto; retorna ao mesmo carrinho atualizado.
 5. **Remover Gmail** — resposta efêmera com Select de contas ativas; o carrinho original é atualizado.
 6. **Editar Pix** — um modal com chave e titular; o carrinho original é atualizado.
@@ -29,13 +29,13 @@ Este documento congela as decisões de produto antes da implementação. O bot �
 
 ### Staff
 
-1. **AGUARDANDO** — botão principal `Assumir`; Select `Ações` com notificar e encerrar.
-2. **EM_ANALISE** — botão principal `Continuar para pagamento`; Select `Ações` com notificar e encerrar.
-3. **Notificar cliente** — modal `Mensagem`; envia DM com link do ticket, libera somente a menção do cliente e trata DM fechada.
+1. **AGUARDANDO** — botão principal `Assumir`; Select `Ações da equipe` com notificar e encerrar.
+2. **EM_ANALISE** — botão principal `Continuar para pagamento`; Select `Ações da equipe` com notificar e encerrar.
+3. **Notificar cliente** — modal `Mensagem`; envia uma DM identificada como SK Store, sem falsa menção, com botão de link para o ticket e tratamento de DM fechada.
 4. **Encerrar venda** — modal `Motivo`; encerra, registra, gera transcript quando habilitado, bloqueia e agenda o fechamento automático.
-5. **PAGAMENTO** — embed dedicado; botão `Confirmar pagamento`; Select `Ações` com voltar, notificar e encerrar.
+5. **PAGAMENTO** — o mesmo embed muda para a etapa dedicada; botão `Confirmar pagamento`; Select `Ações da equipe` com voltar, notificar e encerrar.
 6. **PAGO** — botão único `Finalizar venda`.
-7. **`/fila`** — lista efêmera e compacta das vendas ativas.
+7. **`/fila`** — lista efêmera agrupada por estado, com cliente, responsável, total, tempo relativo e link do ticket.
 
 ### Admin / Manager
 
@@ -49,7 +49,7 @@ Este documento congela as decisões de produto antes da implementação. O bot �
 8. **Logs** — toggles e seletores de canal de logs/transcripts.
 9. **Gerais** — prefixo, máximo de vendas ativas, delay e toggles enxutos.
 10. **Publicar / Atualizar painel** — atualiza o ID salvo; recria somente se a mensagem sumiu.
-11. **Diagnóstico** — checklist de recursos, permissões, SQLite, painel, Views e intents.
+11. **Diagnóstico** — checklist agrupado de configuração, permissões e sistema, incluindo canais opcionais, hierarquia, ícones, SQLite, painel, Views, agendador e intents.
 
 ## Estados e transições
 
@@ -81,7 +81,7 @@ O ticket nega `view_channel` a `@everyone` e permite cliente, Staff, Admin e bot
 - Views estáticas e persistentes, todas com `timeout=None` e `custom_id` explícito e único.
 - Callbacks localizam a venda pelo canal, então não carregam todas as vendas em memória.
 - `setup_hook` registra painel e Views de todos os estados antes de sincronizar comandos.
-- O tópico do canal contém `SKSTORE_SALE_ID=<id>`; se houver reinício entre criar canal e salvar `channel_id`, a recuperação encontra o canal em vez de duplicá-lo.
+- O tópico visível usa `Atendimento privado · Venda #0042 · SK Store`. A recuperação também reconhece o marcador legado `SKSTORE_SALE_ID=<id>`, então uma atualização não duplica tickets antigos.
 - Vendas ativas sem mensagem principal têm a interface recriada; mensagens existentes são restauradas/editadas conforme o estado salvo.
 - Um único agendador consulta o próximo prazo persistido para auto-delete da mensagem automática ou auto-close do ticket; não há polling frequente.
 - A recuperação percorre vendas em lotes de 100 por ID; o histórico inteiro nunca é carregado na RAM.
@@ -104,7 +104,20 @@ O ticket nega `view_channel` a `@everyone` e permite cliente, Staff, Admin e bot
 - Duplicidade no formulário, na mesma venda e em qualquer venda ativa do mesmo servidor é recusada em transação.
 - Locks por venda/cliente e por publicação de painel evitam concorrência local; constraints e updates condicionais garantem correção após restart ou múltiplas instâncias acidentais.
 - Canal e mensagem recebem IDs persistidos; criação e finalização são recuperáveis e idempotentes.
-- Mensagens e logs usam `AllowedMentions` restrito. DMs e avisos de ticket liberam somente o ID do cliente que aparece no texto; tokens e segredos nunca são registrados.
+- Mensagens e logs usam `AllowedMentions` restrito. Avisos dentro do ticket liberam somente o ID do cliente; DMs não simulam menções e usam um botão de link. Tokens e segredos nunca são registrados.
+
+## Encerramento e comunicação
+
+- Ao cancelar, encerrar ou finalizar, os controles somem imediatamente e o
+  ticket é bloqueado mesmo que transcript ou log falhem.
+- Quando o fechamento automático está ativo, o prazo só é calculado depois do
+  transcript, dos logs e do bloqueio. A data fica no SQLite, aparece como tempo
+  relativo no embed terminal e é retomada após reinício.
+- Um erro transitório da API adia a exclusão por cinco minutos; falta de
+  permissão cancela a tentativa e registra uma falha técnica para diagnóstico.
+- A DM da equipe traz identidade visual, texto curto e botão
+  `Abrir atendimento`. Se as DMs estiverem fechadas, Staff recebe uma resposta
+  efêmera clara e o ticket continua funcionando.
 
 ## Intents e limites oficiais adotados
 

@@ -14,6 +14,7 @@ class ButtonStyle:
     secondary = 2
     success = 3
     danger = 4
+    link = 5
 
 
 class TextStyle:
@@ -118,12 +119,14 @@ class Button(Item):
         style: int,
         custom_id: str | None = None,
         emoji: Any = None,
+        url: str | None = None,
         row: int | None = None,
     ) -> None:
         super().__init__(custom_id=custom_id, row=row)
         self.label = label
         self.style = style
         self.emoji = emoji
+        self.url = url
 
 
 class Select(Item):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from app.exceptions import ValidationError
-from app.services.tickets import topic_matches_sale
+from app.services.tickets import format_sale_topic, topic_matches_sale
 from app.utils.money import format_brl, parse_brl_to_cents
 from app.utils.text import safe_channel_name, split_lines
 from app.utils.validation import (
@@ -91,3 +91,9 @@ class ValidationTests(unittest.TestCase):
         self.assertFalse(
             topic_matches_sale("SKSTORE_SALE_ID=42 | Cliente=10", 4)
         )
+        self.assertEqual(
+            format_sale_topic(42),
+            "Atendimento privado · Venda #0042 · SK Store",
+        )
+        self.assertTrue(topic_matches_sale(format_sale_topic(42), 42))
+        self.assertFalse(topic_matches_sale(format_sale_topic(420), 42))
